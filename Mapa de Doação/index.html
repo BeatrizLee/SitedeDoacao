@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoDoar - Encontre um Ponto de Coleta</title>
+    
+    
+    <link rel= "stylesheet" href="estilos/estilos.css">
+   
+</head>
+<body>
+
+    <header>
+        <h1>Estação Solidária</h1>
+        <span>Plataforma de Logística Inteligente</span>
+    </header>
+
+       <div class="main-wrapper">
+        <div class="container">
+            <div class="sidebar">
+                <div class="search-box">
+                    <h3>Encontre pontos de coleta</h3>
+                    <p>💡 Experimente digitar: <b>Centro</b>, <b>Norte</b>, <b>Sul</b> ou <b>Oeste</b></p>
+                    <div class="search-input-group">
+                        <input type="text" id="cepInput" placeholder="Digite o bairro ou região..." value="Centro">
+                        <button onclick="buscarPontos()">Buscar</button>
+                    </div>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0;">
+
+                <div id="resultsTitle"><strong>Pontos encontrados:</strong></div>
+                <div class="results-list" id="resultsList"></div>
+            </div>
+
+            <div class="map-container">
+                <div class="mock-map" id="map">
+                    <div class="street street-h" style="top: 20%;"></div>
+                    <div class="street street-h" style="top: 60%;"></div>
+                    <div class="street street-v" style="left: 30%;"></div>
+                    <div class="street street-v" style="left: 75%;"></div>
+                    
+                    <div class="info-window" id="infoWindow">
+                        <h4 id="iwTitle">Nome</h4>
+                        <p id="iwDist">Distância</p>
+                        
+                        <div class="chart-container">
+                            <div class="donut-chart" id="iwChart">
+                                <span class="chart-label" id="iwChartLabel">0%</span>
+                            </div>
+                            <div class="chart-text">
+                                <b>Ocupação</b><br>do Smart Bin
+                            </div>
+                        </div>
+
+                        <p id="iwStatus" style="font-weight: bold; margin-top: 5px; font-size: 0.85rem;"></p>
+                        
+                        <div class="contact-info">
+                            <span id="iwTelefone"></span>
+                            <a id="iwWhatsapp" class="btn-whatsapp" target="_blank">Chamar no WhatsApp 💬</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="vitrine-section">
+            <h2>Vitrine Virtual Solidária 👕👗</h2>
+            <p>Espaço reservado para famílias cadastradas escolherem peças de forma gratuita, garantindo assertividade e dignidade na distribuição.</p>
+            
+            <div class="vitrine-grid" id="vitrineGrid">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // Banco de Dados de Locais (Mantido do passo anterior)
+        const bancoDadosLocais = [
+            { id: 1, regiao: "centro", nome: "Centro - Supermercado Central", endereco: "Av. Principal, 1500 - Centro", distancia: "0.8 km", capacidade: 35, x: 45, y: 35, telefone: "(11) 4002-8922", whatsapp: "https://wa.me/5511999999991" },
+            { id: 2, regiao: "norte", nome: "Zona Norte - Metrô Santana", endereco: "Rua das Flores, s/n - ZN", distancia: "4.2 km", capacidade: 85, x: 68, y: 15, telefone: "(11) 4003-8933", whatsapp: "https://wa.me/5511999999992" },
+            { id: 3, regiao: "sul", nome: "Zona Sul - Parque Ibirapuera", endereco: "Alameda Verde, 450 - ZS", distancia: "2.3 km", capacidade: 12, x: 25, y: 75, telefone: "(11) 4004-8944", whatsapp: "https://wa.me/5511999999993" },
+            { id: 4, regiao: "oeste", nome: "Zona Oeste - Shopping Bourbon", endereco: "Av. Palestra Itália, 2100 - ZO", distancia: "5.1 km", capacidade: 60, x: 15, y: 45, telefone: "(11) 4005-8955", whatsapp: "https://wa.me/5511999999994" }
+        ];
+
+        // NOVO: Banco de Dados Simulado da Vitrine Virtual (Inventário de Roupas Triadas)
+        const inventarioRoupas = [
+            { id: 101, nome: "Casaco de Lã Inverno", categoria: "Casacos", tamanho: "G", icone: "🧥", origem: "Ponto Zona Norte" },
+            { id: 102, nome: "Vestido Floral Casual", categoria: "Vestidos", tamanho: "M", icone: "👗", origem: "Ponto Centro" },
+            { id: 103, nome: "Tênis Esportivo Confort", categoria: "Calçados", tamanho: "38", icone: "👟", origem: "Ponto Zona Sul" },
+            { id: 104, nome: "Calça Jeans Slim", categoria: "Calças", tamanho: "40", icone: "👖", origem: "Ponto Zona Oeste" },
+            { id: 105, nome: "Jaqueta Corta-Vento", categoria: "Casacos", tamanho: "GG", icone: "🧥", origem: "Ponto Zona Norte" },
+            { id: 106, nome: "Camiseta Algodão Básica", categoria: "Camisetas", tamanho: "P", icone: "👕", origem: "Ponto Centro" }
+        ];
+
+        const resultsList = document.getElementById('resultsList');
+        const map = document.getElementById('map');
+        const infoWindow = document.getElementById('infoWindow');
+        const vitrineGrid = document.getElementById('vitrineGrid');
+
+        // Renderização do Mapa e Busca
+        function renderizarPontos(locais) {
+            resultsList.innerHTML = '';
+            document.querySelectorAll('.marker').forEach(m => m.remove());
+
+            if(locais.length === 0) {
+                resultsList.innerHTML = "<p style='color: #d32f2f; font-size:0.9rem;'>Nenhum ponto encontrado.</p>";
+                infoWindow.style.display = 'none';
+                return;
+            }
+
+            locais.forEach(local => {
+                const card = document.createElement('div');
+                card.className = 'location-card';
+                card.id = `card-${local.id}`;
+                card.onclick = () => selecionarLocal(local);
+
+                const corStatus = local.capacidade >= 80 ? '#d32f2f' : '#4CAF50';
+                const textoStatus = local.capacidade >= 80 ? 'Coleta Urgente (Quase cheio)' : 'Disponível';
+
+                card.innerHTML = `
+                    <h4>${local.nome}</h4>
+                    <p><strong>${local.distancia} de você</strong></p>
+                    <div class="capacity-bar-container"><div class="capacity-bar" style="width: ${local.capacidade}%; background-color: ${corStatus};"></div></div>
+                `;
+                resultsList.appendChild(card);
+
+                const marker = document.createElement('div');
+                marker.className = 'marker';
+                marker.id = `marker-${local.id}`;
+                marker.style.left = `${local.x}%`;
+                marker.style.top = `${local.y}%`;
+                marker.onclick = (e) => { e.stopPropagation(); selecionarLocal(local); };
+                map.appendChild(marker);
+            });
+        }
+
+        function selecionarLocal(local) {
+            document.querySelectorAll('.location-card').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.marker').forEach(m => m.classList.remove('active'));
+
+            document.getElementById(`card-${local.id}`).classList.add('active');
+            document.getElementById(`marker-${local.id}`).classList.add('active');
+
+            infoWindow.style.display = 'block';
+            infoWindow.style.left = `${local.x}%`;
+            infoWindow.style.top = `${local.y}%`;
+
+            document.getElementById('iwTitle').innerText = local.nome;
+            document.getElementById('iwDist').innerText = `Distância: ${local.distancia}`;
+
+            const corGrafico = local.capacidade >= 80 ? '#d32f2f' : '#4CAF50';
+            const iwStatus = document.getElementById('iwStatus');
+            
+            if(local.capacidade >= 80) {
+                iwStatus.innerText = "⚠️ Evite este ponto: Caixa cheia";
+                iwStatus.style.color = "#d32f2f";
+            } else {
+                iwStatus.innerText = "✅ Recomendado para doação";
+                iwStatus.style.color = "#4CAF50";
+            }
+
+            const grafico = document.getElementById('iwChart');
+            grafico.style.setProperty('--percentage', local.capacidade);
+            grafico.style.setProperty('--chart-color', corGrafico);
+            document.getElementById('iwChartLabel').innerText = `${local.capacidade}%`;
+
+            document.getElementById('iwTelefone').innerHTML = `<strong>Tel:</strong> ${local.telefone}`;
+            document.getElementById('iwWhatsapp').href = local.whatsapp;
+        }
+
+        function buscarPontos() {
+            const termoBusca = document.getElementById('cepInput').value.toLowerCase().trim();
+            const locaisFiltrados = bancoDadosLocais.filter(local => 
+                local.regiao.includes(termoBusca) || local.nome.toLowerCase().includes(termoBusca)
+            );
+            renderizarPontos(locaisFiltrados);
+        }
+
+        // ======================================================= 
+        // NOVO: LÓGICA DA VITRINE VIRTUAL                         
+        // ======================================================= 
+        function renderizarVitrine() {
+            vitrineGrid.innerHTML = '';
+
+            inventarioRoupas.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+
+                card.innerHTML = `
+                    <div class="item-image-placeholder">${item.icone}</div>
+                    <div class="item-info">
+                        <span class="tag-tamanho">Tam: ${item.tamanho}</span>
+                        <h4>${item.nome}</h4>
+                        <p>Categoria: ${item.categoria}</p>
+                        <p style="font-size:0.75rem; color:#999;">Doador via: ${item.origem}</p>
+                        <button class="btn-reservar" id="btn-item-${item.id}" onclick="reservarItem(${item.id})">Reservar Peça</button>
+                    </div>
+                `;
+                vitrineGrid.appendChild(card);
+            });
+        }
+
+        // Simula a reserva do item alterando o estado do botão
+        function reservarItem(id) {
+            const botao = document.getElementById(`btn-item-${id}`);
+            if(!botao.classList.contains('reservado')) {
+                botao.classList.add('reservado');
+                botao.innerText = "Reservado com Sucesso! ✓";
+                botao.disabled = true;
+                alert("Peça reservada! O código de retirada foi enviado via SMS para a família cadastrada.");
+            }
+        }
+
+        // Inicialização global da tela
+        renderizarPontos(bancoDadosLocais);
+        renderizarVitrine();
+    </script>
+</body>
+</html>
